@@ -17,6 +17,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly IFramework framework;
     private readonly ICondition condition;
     private readonly IObjectTable objectTable;
+    private readonly IPartyList partyList;
     private readonly IChatGui chatGui;
     private readonly IPluginLog log;
     private readonly DeathDetector deathDetector = new();
@@ -33,6 +34,7 @@ public sealed class Plugin : IDalamudPlugin
         IFramework framework,
         ICondition condition,
         IObjectTable objectTable,
+        IPartyList partyList,
         IChatGui chatGui,
         IPluginLog log)
     {
@@ -41,6 +43,7 @@ public sealed class Plugin : IDalamudPlugin
         this.framework = framework;
         this.condition = condition;
         this.objectTable = objectTable;
+        this.partyList = partyList;
         this.chatGui = chatGui;
         this.log = log;
 
@@ -72,6 +75,19 @@ public sealed class Plugin : IDalamudPlugin
     {
         var localPlayer = objectTable.LocalPlayer;
         var nowUtc = DateTime.UtcNow;
+        var anyMonitoredPlayerDead = localPlayer?.IsDead ?? false;
+
+        if (configuration.IncludePartyMemberDeaths)
+        {
+            foreach (var partyMember in partyList)
+            {
+                if (partyMember.MaxHP > 0 && partyMember.CurrentHP == 0)
+                {
+                    anyMonitoredPlayerDead = true;
+                    break;
+                }
+            }
+        }
 
         if (pendingAutomaticClipUtc is { } triggerAtUtc && nowUtc >= triggerAtUtc)
         {
@@ -82,7 +98,7 @@ public sealed class Plugin : IDalamudPlugin
 
         if (!deathDetector.Observe(
                 localPlayer is not null,
-                localPlayer?.IsDead ?? false,
+                anyMonitoredPlayerDead,
                 condition[ConditionFlag.InCombat],
                 nowUtc,
                 configuration))
@@ -172,6 +188,15 @@ public sealed class Plugin : IDalamudPlugin
             changed = true;
         }
 
+        var includePartyMemberDeaths = configuration.IncludePartyMemberDeaths;
+        if (ImGui.Checkbox("Trigger when any party member dies", ref includePartyMemberDeaths))
+        {
+            configuration.IncludePartyMemberDeaths = includePartyMemberDeaths;
+            pendingAutomaticClipUtc = null;
+            deathDetector.Reset();
+            changed = true;
+        }
+
         var oncePerPull = configuration.OncePerPull;
         if (ImGui.Checkbox("Save only once per pull", ref oncePerPull))
         {
@@ -233,7 +258,7 @@ public sealed class Plugin : IDalamudPlugin
             TrySaveReplay("settings test");
 
         ImGui.Separator();
-        ImGui.TextWrapped("NVIDIA Instant Replay, OBS Replay Buffer, Xbox Game Bar, or another recorder must already be running. Death Clipper only presses the configured save-replay hotkey.");
+        ImGui.TextWrapped("NVIDIA Instant Replay, OBS Replay Buffer, Xbox Game Bar, or another recorder must already be running. Death Clipper only monitors deaths and presses the configured save-replay hotkey.");
 
         ImGui.End();
     }

@@ -1,11 +1,12 @@
 # Death Clipper
 
-Death Clipper is a local Dalamud plugin for FFXIV. When your character changes from alive to dead during combat, it presses the configured **Save Replay** hotkey.
+Death Clipper is a local Dalamud plugin for FFXIV. When you or a monitored party member changes from alive to dead during combat, it presses the configured **Save Replay** hotkey.
 
 Default behavior:
 
 - Save Replay hotkey: `F13`
 - Automatic death clips press the hotkey five seconds after a detected death
+- Party-member death detection is enabled by default and can be toggled in settings
 - Deaths outside combat are ignored
 - Only the first death in each pull saves a replay
 - Ten-second safety cooldown
@@ -56,7 +57,7 @@ The development DLL will be `PluginBuild\DeathClipper.dll`.
 
 ## Notes
 
-- Loading the plugin while already dead does not create a clip.
-- With **Save only once per pull** enabled, being raised and dying again in the same combat will not create a duplicate clip.
+- Loading the plugin while a monitored player is already dead does not create a clip.
+- With **Save only once per pull** enabled, additional deaths in the same combat will not create duplicate clips.
 - FFXIV and third-party plugins may violate Square Enix's terms of service. Use at your own discretion.
 - This project was created with AI assistance. Dalamud's official repository requires AI use to be disclosed and the code to be personally reviewed and tested before submission.
