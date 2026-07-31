@@ -42,7 +42,11 @@ jobs:
         id: version
         shell: pwsh
         run: |
-          $version = "2.0.${{ github.run_number }}"
+          $project = [xml](Get-Content .\DeathClipper.csproj -Raw)
+          $version = [string]$project.Project.PropertyGroup.Version
+          if ([string]::IsNullOrWhiteSpace($version)) {
+            throw "DeathClipper.csproj does not define a Version."
+          }
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
