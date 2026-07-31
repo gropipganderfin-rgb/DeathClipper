@@ -23,12 +23,6 @@ The included `.github/workflows/publish.yml` workflow builds the plugin, creates
 5. Open **Actions → Publish Death Clipper → Run workflow**.
 6. Wait for both the `build` and `deploy` jobs to finish.
 
-Your Dalamud custom repository URL will be:
-
-```text
-https://YOUR-GITHUB-NAME.github.io/YOUR-REPOSITORY-NAME/repo.json
-```
-
 In FFXIV:
 
 1. Remove any Death Clipper DLL from **Dev Plugin Locations**.
