@@ -1,0 +1,13 @@
+{
+  "Author": "Local Build",
+  "Name": "Death Clipper",
+  "Punchline": "Save the pull automatically when you die.",
+  "Description": "Detects when your local character dies during combat and presses the configured Save Replay hotkey. Defaults to F13 and works with NVIDIA Instant Replay, OBS Replay Buffer, Xbox Game Bar, AMD Software, and other recorders.",
+  "ApplicableVersion": "any",
+  "Tags": [
+    "recording",
+    "clip",
+    "replay",
+    "death"
+  ]
+}
