@@ -5,6 +5,7 @@ Death Clipper is a local Dalamud plugin for FFXIV. When your character changes f
 Default behavior:
 
 - Save Replay hotkey: `F13`
+- Automatic death clips press the hotkey five seconds after a detected death
 - Deaths outside combat are ignored
 - Only the first death in each pull saves a replay
 - Ten-second safety cooldown
@@ -35,7 +36,7 @@ In FFXIV:
 3. Add the URL under **Custom Plugin Repositories**.
 4. Save, open `/xlplugins`, search for **Death Clipper**, and install it.
 
-Every push to `main` creates a new plugin version so Dalamud can detect and install updates.
+Each project version bump pushed to `main` creates a new plugin release so Dalamud can detect and install updates.
 
 ## Recorder setup
 
@@ -53,7 +54,7 @@ Enable Replay Buffer, assign its save shortcut to `F13`, and start Replay Buffer
 ## Commands
 
 - `/deathclip` — open settings
-- `/deathclip test` — press F13 immediately
+- `/deathclip test` — press F13 immediately, without the five-second automatic delay
 - `/deathclip on` — enable automatic death clips
 - `/deathclip off` — disable automatic death clips
 
