@@ -1,4 +1,4 @@
-name: Publish Death Clipper
+name: Publish Death Clipper Plugin
 
 on:
   workflow_dispatch:
@@ -8,15 +8,13 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 concurrency:
-  group: deathclipper-publish
+  group: deathclipper-plugin-publish
   cancel-in-progress: false
 
 jobs:
-  build:
+  publish:
     runs-on: windows-latest
 
     steps:
@@ -37,10 +35,8 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           "tag=v$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
 
-      - name: Restore packages
-        run: |
-          dotnet restore .\DeathClipper.csproj
-          dotnet restore .\DeathClipper.Recorder\DeathClipper.Recorder.csproj -r win-x64
+      - name: Restore plugin
+        run: dotnet restore .\DeathClipper.csproj
 
       - name: Build plugin
         run: >-
@@ -50,21 +46,10 @@ jobs:
           -p:Version=${{ steps.version.outputs.version }}
           --no-restore
 
-      - name: Build Windows recorder
-        run: >-
-          dotnet publish .\DeathClipper.Recorder\DeathClipper.Recorder.csproj
-          -c Release
-          -r win-x64
-          --self-contained true
-          -p:PublishSingleFile=true
-          --no-restore
-
-      - name: Package release and repository
+      - name: Create Dalamud repository files
         shell: pwsh
-        env:
-          RELEASE_VERSION: ${{ steps.version.outputs.version }}
         run: |
-          New-Item -ItemType Directory -Force -Path artifacts, package, site | Out-Null
+          New-Item -ItemType Directory -Force -Path artifacts, package | Out-Null
 
           $pluginZip = Get-ChildItem -Path . -Recurse -Filter latest.zip |
             Where-Object { $_.FullName -match "DeathClipper" } |
@@ -84,7 +69,8 @@ jobs:
           }
 
           $repositoryUrl = "https://github.com/${{ github.repository }}"
-          $downloadUrl = "$repositoryUrl/releases/latest/download/DeathClipper-latest.zip"
+          $releaseBase = "$repositoryUrl/releases/latest/download"
+          $pluginUrl = "$releaseBase/DeathClipper-latest.zip"
           $manifest = Get-Content $manifestFile.FullName -Raw | ConvertFrom-Json
           $manifest | Add-Member -NotePropertyName RepoUrl -NotePropertyValue $repositoryUrl -Force
           $manifest | ConvertTo-Json -Depth 20 | Set-Content $manifestFile.FullName -Encoding utf8
@@ -95,32 +81,11 @@ jobs:
           $repoEntry | Add-Member -NotePropertyName TestingAssemblyVersion -NotePropertyValue $null -Force
           $repoEntry | Add-Member -NotePropertyName IsHide -NotePropertyValue $false -Force
           $repoEntry | Add-Member -NotePropertyName IsTestingExclusive -NotePropertyValue $false -Force
-          $repoEntry | Add-Member -NotePropertyName DownloadLinkInstall -NotePropertyValue $downloadUrl -Force
-          $repoEntry | Add-Member -NotePropertyName DownloadLinkUpdate -NotePropertyValue $downloadUrl -Force
-          $repoEntry | Add-Member -NotePropertyName DownloadLinkTesting -NotePropertyValue $downloadUrl -Force
+          $repoEntry | Add-Member -NotePropertyName DownloadLinkInstall -NotePropertyValue $pluginUrl -Force
+          $repoEntry | Add-Member -NotePropertyName DownloadLinkUpdate -NotePropertyValue $pluginUrl -Force
+          $repoEntry | Add-Member -NotePropertyName DownloadLinkTesting -NotePropertyValue $pluginUrl -Force
           $repoEntry | Add-Member -NotePropertyName LastUpdate -NotePropertyValue ([DateTimeOffset]::UtcNow.ToUnixTimeSeconds().ToString()) -Force
-          ConvertTo-Json -InputObject @($repoEntry) -Depth 20 | Set-Content site\repo.json -Encoding utf8
-
-          $publishFolder = ".\DeathClipper.Recorder\bin\Release\net10.0-windows\win-x64\publish"
-          if (-not (Test-Path "$publishFolder\DeathClipper.Recorder.exe")) {
-            throw "The recorder built, but DeathClipper.Recorder.exe was not found."
-          }
-
-          Compress-Archive -Path "$publishFolder\*" -DestinationPath artifacts\DeathClipperRecorder-win-x64.zip -Force
-
-          $pagesUrl = "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/repo.json"
-          @"
-          <!doctype html>
-          <html lang="en">
-          <head><meta charset="utf-8"><title>Death Clipper Repository</title></head>
-          <body>
-            <h1>Death Clipper</h1>
-            <p>Dalamud custom repository:</p>
-            <code>$pagesUrl</code>
-            <p><a href="$repositoryUrl/releases/latest">Download the recorder</a></p>
-          </body>
-          </html>
-          "@ | Set-Content site\index.html -Encoding utf8
+          ConvertTo-Json -InputObject @($repoEntry) -Depth 20 | Set-Content artifacts\repo.json -Encoding utf8
 
       - name: Create GitHub release
         shell: pwsh
@@ -132,58 +97,24 @@ jobs:
           if (gh release view $env:RELEASE_TAG 2>$null) {
             gh release upload $env:RELEASE_TAG `
               artifacts\DeathClipper-latest.zip `
-              artifacts\DeathClipperRecorder-win-x64.zip `
+              artifacts\repo.json `
               --clobber
           }
           else {
             gh release create $env:RELEASE_TAG `
               artifacts\DeathClipper-latest.zip `
-              artifacts\DeathClipperRecorder-win-x64.zip `
+              artifacts\repo.json `
               --title "Death Clipper $env:RELEASE_VERSION" `
-              --notes "Automated Death Clipper release." `
+              --notes "Automated Death Clipper plugin release." `
               --latest
           }
 
-      - name: Upload downloadable builds
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: DeathClipper-${{ steps.version.outputs.version }}
           path: |
             artifacts/DeathClipper-latest.zip
-            artifacts/DeathClipperRecorder-win-x64.zip
+            artifacts/repo.json
           if-no-files-found: error
           retention-days: 30
-
-      - name: Upload repository site
-        uses: actions/upload-artifact@v4
-        with:
-          name: deathclipper-repository-site
-          path: site
-          if-no-files-found: error
-          retention-days: 1
-
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-
-    steps:
-      - name: Download repository site
-        uses: actions/download-artifact@v4
-        with:
-          name: deathclipper-repository-site
-          path: site
-
-      - name: Configure GitHub Pages
-        uses: actions/configure-pages@v5
-
-      - name: Upload GitHub Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: site
-
-      - name: Deploy repository
-        id: deployment
-        uses: actions/deploy-pages@v5
