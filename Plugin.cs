@@ -10,6 +10,7 @@ namespace DeathClipper;
 public sealed class Plugin : IDalamudPlugin
 {
     private const string CommandName = "/deathclip";
+    private static readonly TimeSpan AutomaticClipDelay = TimeSpan.FromSeconds(5);
 
     private readonly IDalamudPluginInterface pluginInterface;
     private readonly ICommandManager commandManager;
@@ -21,6 +22,7 @@ public sealed class Plugin : IDalamudPlugin
     private readonly DeathDetector deathDetector = new();
 
     private Configuration configuration;
+    private DateTime? pendingAutomaticClipUtc;
     private bool configWindowOpen;
     private string hotkeyValidationMessage = string.Empty;
     private bool hotkeyIsValid = true;
@@ -71,6 +73,13 @@ public sealed class Plugin : IDalamudPlugin
         var localPlayer = objectTable.LocalPlayer;
         var nowUtc = DateTime.UtcNow;
 
+        if (pendingAutomaticClipUtc is { } triggerAtUtc && nowUtc >= triggerAtUtc)
+        {
+            pendingAutomaticClipUtc = null;
+            if (TrySaveReplay("automatic death (5-second delay)"))
+                deathDetector.MarkClipSaved(nowUtc);
+        }
+
         if (!deathDetector.Observe(
                 localPlayer is not null,
                 localPlayer?.IsDead ?? false,
@@ -79,8 +88,7 @@ public sealed class Plugin : IDalamudPlugin
                 configuration))
             return;
 
-        if (TrySaveReplay("death"))
-            deathDetector.MarkClipSaved(nowUtc);
+        pendingAutomaticClipUtc ??= nowUtc + AutomaticClipDelay;
     }
 
     private bool TrySaveReplay(string reason)
