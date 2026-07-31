@@ -52,21 +52,6 @@ Enable Replay Buffer, assign its save shortcut to `F13`, and start Replay Buffer
 - `/deathclip on` — enable automatic death clips
 - `/deathclip off` — disable automatic death clips
 
-## Local build
-
-Requirements:
-
-- Windows 10 or 11
-- [.NET 10 SDK](https://dotnet.microsoft.com/download/dotnet/10.0)
-- XIVLauncher with Dalamud
-
-Build without using a PowerShell script:
-
-```powershell
-dotnet restore .\DeathClipper.csproj
-dotnet build .\DeathClipper.csproj -c Release -p:Platform=x64 -o .\PluginBuild
-```
-
 The development DLL will be `PluginBuild\DeathClipper.dll`.
 
 ## Notes
