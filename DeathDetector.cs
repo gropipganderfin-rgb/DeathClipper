@@ -1,7 +1,7 @@
 namespace DeathClipper;
 
 /// <summary>
-/// Converts frame-by-frame player state into a single clip request on the death edge.
+/// Converts frame-by-frame monitored player state into a single clip request on the death edge.
 /// </summary>
 internal sealed class DeathDetector
 {
@@ -20,10 +20,7 @@ internal sealed class DeathDetector
     {
         if (!playerAvailable)
         {
-            initialized = false;
-            wasDead = false;
-            wasInCombat = false;
-            clippedThisPull = false;
+            Reset();
             return false;
         }
 
@@ -60,5 +57,13 @@ internal sealed class DeathDetector
     {
         lastClipUtc = nowUtc;
         clippedThisPull = true;
+    }
+
+    public void Reset()
+    {
+        initialized = false;
+        wasDead = false;
+        wasInCombat = false;
+        clippedThisPull = false;
     }
 }
