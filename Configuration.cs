@@ -11,6 +11,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool OnlyInCombat { get; set; } = true;
 
+    public bool IncludePartyMemberDeaths { get; set; } = true;
+
     public bool OncePerPull { get; set; } = true;
 
     public bool ShowChatMessage { get; set; } = true;
