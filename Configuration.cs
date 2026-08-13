@@ -5,7 +5,7 @@ namespace DeathClipper;
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 1;
+    public int Version { get; set; } = 2;
 
     public bool Enabled { get; set; } = true;
 
@@ -25,7 +25,8 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool DisableInstantReplayOnDutyExit { get; set; } = true;
 
-    public string InstantReplayToggleHotkey { get; set; } = "ALT+SHIFT+F10";
+    public string InstantReplayToggleHotkey { get; set; } = "ALT+T";
 
     public int DutyEntryDelaySeconds { get; set; } = 5;
 }
+

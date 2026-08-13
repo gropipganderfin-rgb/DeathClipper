@@ -794,3 +794,4 @@ public sealed class Plugin : IDalamudPlugin
             configuration);
     }
 }
+

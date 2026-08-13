@@ -31,7 +31,7 @@ unexpectedly affected after updating.
 
 The default Instant Replay toggle shortcut is:
 
-`ALT+SHIFT+F10`
+`ALT+T`
 
 This can be changed in Death Clipper settings.
 
@@ -83,3 +83,4 @@ may no longer match NVIDIA. Use **Reset tracked state to UNKNOWN** when needed.
 - This project was created with AI assistance. Dalamud's official repository
   requires AI use to be disclosed and the code to be personally reviewed and
   tested before submission.
+
