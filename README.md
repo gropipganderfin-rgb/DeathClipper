@@ -1,4 +1,4 @@
-﻿# Death Clipper
+# Death Clipper
 
 Death Clipper is a local Dalamud plugin for FFXIV. When you or a monitored
 party member changes from alive to dead during combat, it presses the
@@ -32,6 +32,9 @@ unexpectedly affected after updating.
 The default Instant Replay toggle shortcut is:
 
 `ALT+T`
+
+Existing configurations that still contain the previous default
+`ALT+SHIFT+F10` are automatically migrated to `ALT+T` when loaded.
 
 This can be changed in Death Clipper settings.
 
@@ -83,4 +86,3 @@ may no longer match NVIDIA. Use **Reset tracked state to UNKNOWN** when needed.
 - This project was created with AI assistance. Dalamud's official repository
   requires AI use to be disclosed and the code to be personally reviewed and
   tested before submission.
-

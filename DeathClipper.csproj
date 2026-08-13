@@ -1,7 +1,7 @@
-﻿<Project Sdk="Dalamud.NET.Sdk/15.0.0">
+<Project Sdk="Dalamud.NET.Sdk/15.0.0">
   <PropertyGroup>
     <TargetFramework>net10.0-windows</TargetFramework>
-    <Version>2.1.1.0</Version>
+    <Version>2.1.2.0</Version>
     <LangVersion>latest</LangVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -12,4 +12,3 @@
     <Description>Automatically saves FFXIV death replays and can manage NVIDIA Instant Replay while inside duties.</Description>
   </PropertyGroup>
 </Project>
-

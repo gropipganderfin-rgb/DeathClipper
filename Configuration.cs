@@ -1,10 +1,12 @@
-﻿using Dalamud.Configuration;
+using Dalamud.Configuration;
 
 namespace DeathClipper;
 
 [Serializable]
 public sealed class Configuration : IPluginConfiguration
 {
+    private string instantReplayToggleHotkey = "ALT+T";
+
     public int Version { get; set; } = 2;
 
     public bool Enabled { get; set; } = true;
@@ -25,8 +27,14 @@ public sealed class Configuration : IPluginConfiguration
 
     public bool DisableInstantReplayOnDutyExit { get; set; } = true;
 
-    public string InstantReplayToggleHotkey { get; set; } = "ALT+T";
+    public string InstantReplayToggleHotkey
+    {
+        get => instantReplayToggleHotkey;
+        set => instantReplayToggleHotkey =
+            string.Equals(value, "ALT+SHIFT+F10", StringComparison.OrdinalIgnoreCase)
+                ? "ALT+T"
+                : value;
+    }
 
     public int DutyEntryDelaySeconds { get; set; } = 5;
 }
-
