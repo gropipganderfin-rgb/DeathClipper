@@ -1,4 +1,4 @@
-using Dalamud.Configuration;
+﻿using Dalamud.Configuration;
 
 namespace DeathClipper;
 
@@ -20,4 +20,12 @@ public sealed class Configuration : IPluginConfiguration
     public int CooldownSeconds { get; set; } = 10;
 
     public string SaveReplayHotkey { get; set; } = "F13";
+
+    public bool ManageInstantReplay { get; set; } = false;
+
+    public bool DisableInstantReplayOnDutyExit { get; set; } = true;
+
+    public string InstantReplayToggleHotkey { get; set; } = "ALT+SHIFT+F10";
+
+    public int DutyEntryDelaySeconds { get; set; } = 5;
 }

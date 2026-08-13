@@ -1,63 +1,85 @@
-# Death Clipper
+﻿# Death Clipper
 
-Death Clipper is a local Dalamud plugin for FFXIV. When you or a monitored party member changes from alive to dead during combat, it presses the configured **Save Replay** hotkey.
+Death Clipper is a local Dalamud plugin for FFXIV. When you or a monitored
+party member changes from alive to dead during combat, it presses the
+configured Save Replay hotkey.
 
-Default behavior:
+## Default death-clip behavior
 
 - Save Replay hotkey: `F13`
-- Automatic death clips press the hotkey five seconds after a detected death
-- Party-member death detection is enabled by default and can be toggled in settings
+- Automatic death clips save five seconds after a detected death
+- Party-member death detection is enabled by default
 - Deaths outside combat are ignored
 - Only the first death in each pull saves a replay
 - Ten-second safety cooldown
 
-The plugin does not record or encode video. NVIDIA Instant Replay, OBS Replay Buffer, Xbox Game Bar, AMD Software, or another recorder must already be running with its save-replay shortcut set to `F13`.
+## NVIDIA Instant Replay duty management
 
-## Publish as a GitHub Dalamud repository
+Version 2.1 adds optional NVIDIA Instant Replay management.
 
-The included `.github/workflows/publish.yml` workflow builds the plugin, creates a GitHub Release, generates `repo.json`, and deploys the repository through GitHub Pages.
+When enabled:
 
-1. Create a **public** GitHub repository.
-2. Upload the **contents** of this folder to the repository root. `DeathClipper.csproj` must be at the root.
-3. Confirm `.github/workflows/publish.yml` was uploaded.
-4. Open **Settings → Pages** and select **GitHub Actions** as the source.
-5. Open **Actions → Publish Death Clipper → Run workflow**.
-6. Wait for both the `build` and `deploy` jobs to finish.
+1. Enter a duty.
+2. Death Clipper detects a Dalamud BoundByDuty condition.
+3. It waits the configured number of seconds.
+4. It presses the configured NVIDIA Instant Replay toggle hotkey.
+5. Death clipping continues normally.
+6. When you leave the duty, Death Clipper can toggle Instant Replay back off.
 
-In FFXIV:
+The duty-management feature is OFF by default so existing users are not
+unexpectedly affected after updating.
 
-1. Remove any Death Clipper DLL from **Dev Plugin Locations**.
-2. Enter `/xlsettings` and open **Experimental**.
-3. Add the URL under **Custom Plugin Repositories**.
-4. Save, open `/xlplugins`, search for **Death Clipper**, and install it.
+The default Instant Replay toggle shortcut is:
 
-Each project version bump pushed to `main` creates a new plugin release so Dalamud can detect and install updates.
+`ALT+SHIFT+F10`
 
-## Recorder setup
+This can be changed in Death Clipper settings.
 
-### NVIDIA App
+### Important state limitation
 
-1. Enable **Instant Replay**.
-2. Set its replay duration long enough to cover your pulls.
-3. Change **Save Instant Replay** to `F13`.
-4. In FFXIV, enter `/deathclip test` and confirm NVIDIA saves a clip.
+NVIDIA does not expose a reliable Instant Replay ON/OFF state to Death Clipper.
 
-### OBS
+Death Clipper therefore tracks the state based on the toggle hotkeys that the
+plugin itself sends.
 
-Enable Replay Buffer, assign its save shortcut to `F13`, and start Replay Buffer before playing.
+The settings window shows one of:
+
+- `ON (tracked)`
+- `OFF (tracked)`
+- `UNKNOWN`
+
+If Instant Replay is manually toggled outside Death Clipper, the tracked state
+may no longer match NVIDIA. Use **Reset tracked state to UNKNOWN** when needed.
+
+## NVIDIA setup
+
+1. Open the NVIDIA overlay.
+2. Confirm Instant Replay works normally.
+3. Confirm the Instant Replay toggle shortcut matches the shortcut configured
+   in Death Clipper.
+4. Configure the replay length you want.
+5. Configure Death Clipper's Save Replay hotkey.
+6. Use `/deathclip test` to test saving a replay.
+7. Enable **Automatically manage Instant Replay in duties** if desired.
 
 ## Commands
 
-- `/deathclip` — open settings
-- `/deathclip test` — press F13 immediately, without the five-second automatic delay
-- `/deathclip on` — enable automatic death clips
-- `/deathclip off` — disable automatic death clips
-
-The development DLL will be `PluginBuild\DeathClipper.dll`.
+- `/deathclip` - open settings
+- `/deathclip test` - immediately press the Save Replay hotkey
+- `/deathclip on` - enable automatic death clips
+- `/deathclip off` - disable automatic death clips
+- `/deathclip replaystatus` - show Death Clipper's tracked Instant Replay state
+- `/deathclip forgetreplaystate` - reset tracked Instant Replay state to UNKNOWN
 
 ## Notes
 
 - Loading the plugin while a monitored player is already dead does not create a clip.
-- With **Save only once per pull** enabled, additional deaths in the same combat will not create duplicate clips.
-- FFXIV and third-party plugins may violate Square Enix's terms of service. Use at your own discretion.
-- This project was created with AI assistance. Dalamud's official repository requires AI use to be disclosed and the code to be personally reviewed and tested before submission.
+- Loading Death Clipper while already inside a duty does not blindly toggle
+  Instant Replay.
+- With **Save only once per pull** enabled, additional deaths in the same combat
+  will not create duplicate clips.
+- FFXIV and third-party plugins may violate Square Enix's terms of service.
+  Use at your own discretion.
+- This project was created with AI assistance. Dalamud's official repository
+  requires AI use to be disclosed and the code to be personally reviewed and
+  tested before submission.

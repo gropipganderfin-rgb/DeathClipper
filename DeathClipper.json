@@ -1,8 +1,8 @@
-{
+﻿{
   "Author": "Local Build",
   "Name": "Death Clipper",
   "Punchline": "Save the pull automatically when you die.",
-  "Description": "Detects when you or a monitored party member dies during combat and presses the configured Save Replay hotkey. Party-member detection is togglable. Defaults to F13 and works with NVIDIA Instant Replay, OBS Replay Buffer, Xbox Game Bar, AMD Software, and other recorders.",
+  "Description": "Detects when you or a monitored party member dies during combat and presses the configured Save Replay hotkey. Can optionally manage NVIDIA Instant Replay when entering and leaving duties.",
   "ApplicableVersion": "any",
   "Tags": [
     "recording",
