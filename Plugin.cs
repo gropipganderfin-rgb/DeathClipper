@@ -1,4 +1,4 @@
-using System.Numerics;
+﻿using System.Numerics;
 using Dalamud.Bindings.ImGui;
 using Dalamud.Game.ClientState.Conditions;
 using Dalamud.Game.Command;
@@ -23,7 +23,21 @@ public sealed class Plugin : IDalamudPlugin
     private readonly DeathDetector deathDetector = new();
 
     private Configuration configuration;
+
     private DateTime? pendingAutomaticClipUtc;
+    private DateTime? pendingInstantReplayEnableUtc;
+
+    private bool dutyStateInitialized;
+    private bool wasInDuty;
+
+    // This is only the state Death Clipper believes NVIDIA Instant Replay is in
+    // based on hotkeys that Death Clipper itself has sent.
+    //
+    // null  = unknown
+    // true  = tracked on
+    // false = tracked off
+    private bool? instantReplayTrackedOn;
+
     private bool configWindowOpen;
     private string hotkeyValidationMessage = string.Empty;
     private bool hotkeyIsValid = true;
@@ -48,13 +62,16 @@ public sealed class Plugin : IDalamudPlugin
         this.log = log;
 
         configuration = pluginInterface.GetPluginConfig() as Configuration ?? new Configuration();
+
         configuration.Version = 1;
         configuration.CooldownSeconds = Math.Clamp(configuration.CooldownSeconds, 0, 300);
+        configuration.DutyEntryDelaySeconds = Math.Clamp(configuration.DutyEntryDelaySeconds, 0, 30);
+
         ValidateHotkey();
 
         commandManager.AddHandler(CommandName, new CommandInfo(OnCommand)
         {
-            HelpMessage = "Open Death Clipper settings. Use '/deathclip test' to test F13.",
+            HelpMessage = "Open Death Clipper settings. Use '/deathclip test' to test the save-replay hotkey.",
             ShowInHelp = true,
         });
 
@@ -75,6 +92,10 @@ public sealed class Plugin : IDalamudPlugin
     {
         var localPlayer = objectTable.LocalPlayer;
         var nowUtc = DateTime.UtcNow;
+
+        var isInDuty = IsInDuty();
+        HandleInstantReplayDutyManagement(isInDuty, nowUtc);
+
         var anyMonitoredPlayerDead = localPlayer?.IsDead ?? false;
 
         if (configuration.IncludePartyMemberDeaths)
@@ -92,6 +113,7 @@ public sealed class Plugin : IDalamudPlugin
         if (pendingAutomaticClipUtc is { } triggerAtUtc && nowUtc >= triggerAtUtc)
         {
             pendingAutomaticClipUtc = null;
+
             if (TrySaveReplay("automatic death (5-second delay)"))
                 deathDetector.MarkClipSaved(nowUtc);
         }
@@ -102,9 +124,81 @@ public sealed class Plugin : IDalamudPlugin
                 condition[ConditionFlag.InCombat],
                 nowUtc,
                 configuration))
+        {
             return;
+        }
 
         pendingAutomaticClipUtc ??= nowUtc + AutomaticClipDelay;
+    }
+
+    private bool IsInDuty()
+    {
+        return condition[ConditionFlag.BoundByDuty]
+               || condition[ConditionFlag.BoundByDuty56]
+               || condition[ConditionFlag.BoundByDuty95];
+    }
+
+    private void HandleInstantReplayDutyManagement(bool isInDuty, DateTime nowUtc)
+    {
+        if (!dutyStateInitialized)
+        {
+            dutyStateInitialized = true;
+            wasInDuty = isInDuty;
+            return;
+        }
+
+        if (!configuration.ManageInstantReplay)
+        {
+            pendingInstantReplayEnableUtc = null;
+            wasInDuty = isInDuty;
+            return;
+        }
+
+        if (isInDuty && !wasInDuty)
+        {
+            // Only toggle if Death Clipper does not already believe it is on.
+            if (instantReplayTrackedOn != true)
+            {
+                pendingInstantReplayEnableUtc =
+                    nowUtc + TimeSpan.FromSeconds(configuration.DutyEntryDelaySeconds);
+
+                log.Information(
+                    "Entered duty. Instant Replay enable scheduled in {Delay} seconds.",
+                    configuration.DutyEntryDelaySeconds);
+            }
+        }
+        else if (!isInDuty && wasInDuty)
+        {
+            pendingInstantReplayEnableUtc = null;
+
+            if (configuration.DisableInstantReplayOnDutyExit
+                && instantReplayTrackedOn == true)
+            {
+                TryToggleInstantReplay(
+                    assumedStateAfterToggle: false,
+                    reason: "leaving duty");
+            }
+        }
+
+        wasInDuty = isInDuty;
+
+        if (pendingInstantReplayEnableUtc is not { } enableAtUtc
+            || nowUtc < enableAtUtc)
+        {
+            return;
+        }
+
+        pendingInstantReplayEnableUtc = null;
+
+        if (!isInDuty)
+            return;
+
+        if (instantReplayTrackedOn == true)
+            return;
+
+        TryToggleInstantReplay(
+            assumedStateAfterToggle: true,
+            reason: "entering duty");
     }
 
     private bool TrySaveReplay(string reason)
@@ -119,13 +213,71 @@ public sealed class Plugin : IDalamudPlugin
         if (!Hotkey.TrySend(parsedHotkey, out var sendError))
         {
             log.Error("Could not send replay hotkey: {Error}", sendError);
-            chatGui.PrintError($"[Death Clipper] Could not send {parsedHotkey.DisplayName}: {sendError}");
+            chatGui.PrintError(
+                $"[Death Clipper] Could not send {parsedHotkey.DisplayName}: {sendError}");
             return false;
         }
 
-        log.Information("Sent replay hotkey {Hotkey}; reason: {Reason}", parsedHotkey.DisplayName, reason);
+        log.Information(
+            "Sent replay hotkey {Hotkey}; reason: {Reason}",
+            parsedHotkey.DisplayName,
+            reason);
+
         if (configuration.ShowChatMessage)
-            chatGui.Print($"[Death Clipper] Sent {parsedHotkey.DisplayName} to save the replay.");
+        {
+            chatGui.Print(
+                $"[Death Clipper] Sent {parsedHotkey.DisplayName} to save the replay.");
+        }
+
+        return true;
+    }
+
+    private bool TryToggleInstantReplay(bool assumedStateAfterToggle, string reason)
+    {
+        if (!Hotkey.TryParse(
+                configuration.InstantReplayToggleHotkey,
+                out var parsedHotkey,
+                out var parseError))
+        {
+            log.Error(
+                "Could not toggle Instant Replay: invalid toggle hotkey: {Error}",
+                parseError);
+
+            chatGui.PrintError(
+                $"[Death Clipper] Invalid Instant Replay toggle hotkey: {parseError}");
+
+            instantReplayTrackedOn = null;
+            return false;
+        }
+
+        if (!Hotkey.TrySend(parsedHotkey, out var sendError))
+        {
+            log.Error(
+                "Could not send Instant Replay toggle hotkey: {Error}",
+                sendError);
+
+            chatGui.PrintError(
+                $"[Death Clipper] Could not send {parsedHotkey.DisplayName}: {sendError}");
+
+            instantReplayTrackedOn = null;
+            return false;
+        }
+
+        instantReplayTrackedOn = assumedStateAfterToggle;
+
+        var stateText = assumedStateAfterToggle ? "ON" : "OFF";
+
+        log.Information(
+            "Sent Instant Replay toggle hotkey {Hotkey}; tracked state: {State}; reason: {Reason}",
+            parsedHotkey.DisplayName,
+            stateText,
+            reason);
+
+        if (configuration.ShowChatMessage)
+        {
+            chatGui.Print(
+                $"[Death Clipper] Toggled NVIDIA Instant Replay. Tracked state: {stateText}.");
+        }
 
         return true;
     }
@@ -133,6 +285,7 @@ public sealed class Plugin : IDalamudPlugin
     private void OnCommand(string command, string arguments)
     {
         var argument = arguments.Trim();
+
         if (argument.Equals("test", StringComparison.OrdinalIgnoreCase))
         {
             TrySaveReplay("manual test");
@@ -150,23 +303,45 @@ public sealed class Plugin : IDalamudPlugin
         if (argument.Equals("off", StringComparison.OrdinalIgnoreCase))
         {
             configuration.Enabled = false;
+            pendingAutomaticClipUtc = null;
             SaveConfiguration();
             chatGui.Print("[Death Clipper] Disabled.");
+            return;
+        }
+
+        if (argument.Equals("replaystatus", StringComparison.OrdinalIgnoreCase))
+        {
+            chatGui.Print(
+                $"[Death Clipper] Instant Replay tracked state: {GetInstantReplayStateText()}.");
+            return;
+        }
+
+        if (argument.Equals("forgetreplaystate", StringComparison.OrdinalIgnoreCase))
+        {
+            instantReplayTrackedOn = null;
+            chatGui.Print("[Death Clipper] Instant Replay tracked state reset to UNKNOWN.");
             return;
         }
 
         configWindowOpen = true;
     }
 
-    private void OpenConfiguration() => configWindowOpen = true;
+    private void OpenConfiguration()
+    {
+        configWindowOpen = true;
+    }
 
     private void DrawConfiguration()
     {
         if (!configWindowOpen)
             return;
 
-        ImGui.SetNextWindowSize(new Vector2(480, 0), ImGuiCond.FirstUseEver);
-        if (!ImGui.Begin("Death Clipper Settings###DeathClipperSettings", ref configWindowOpen, ImGuiWindowFlags.AlwaysAutoResize))
+        ImGui.SetNextWindowSize(new Vector2(500, 0), ImGuiCond.FirstUseEver);
+
+        if (!ImGui.Begin(
+                "Death Clipper Settings###DeathClipperSettings",
+                ref configWindowOpen,
+                ImGuiWindowFlags.AlwaysAutoResize))
         {
             ImGui.End();
             return;
@@ -221,14 +396,17 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         ImGui.SameLine();
-        if (ImGui.Button("NVIDIA default: ALT+F10"))
+
+        if (ImGui.Button("NVIDIA: ALT+F10"))
         {
             configuration.SaveReplayHotkey = "ALT+F10";
             changed = true;
         }
 
         var hotkeyText = configuration.SaveReplayHotkey;
+
         ImGui.SetNextItemWidth(260);
+
         if (ImGui.InputText("Custom hotkey", ref hotkeyText, 64))
         {
             configuration.SaveReplayHotkey = hotkeyText.ToUpperInvariant();
@@ -236,7 +414,9 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         var cooldown = configuration.CooldownSeconds;
+
         ImGui.SetNextItemWidth(100);
+
         if (ImGui.InputInt("Minimum seconds between clips", ref cooldown))
         {
             configuration.CooldownSeconds = Math.Clamp(cooldown, 0, 300);
@@ -250,24 +430,156 @@ public sealed class Plugin : IDalamudPlugin
         }
 
         if (hotkeyIsValid)
-            ImGui.TextColored(new Vector4(0.35f, 0.85f, 0.55f, 1f), hotkeyValidationMessage);
+        {
+            ImGui.TextColored(
+                new Vector4(0.35f, 0.85f, 0.55f, 1f),
+                hotkeyValidationMessage);
+        }
         else
-            ImGui.TextColored(new Vector4(1f, 0.35f, 0.35f, 1f), hotkeyValidationMessage);
+        {
+            ImGui.TextColored(
+                new Vector4(1f, 0.35f, 0.35f, 1f),
+                hotkeyValidationMessage);
+        }
 
         if (ImGui.Button("Test: press save-replay hotkey"))
+        {
             TrySaveReplay("settings test");
+        }
 
         ImGui.Separator();
-        ImGui.TextWrapped("NVIDIA Instant Replay, OBS Replay Buffer, Xbox Game Bar, or another recorder must already be running. Death Clipper only monitors deaths and presses the configured save-replay hotkey.");
+        ImGui.TextUnformatted("NVIDIA Instant Replay duty management");
+
+        var manageInstantReplay = configuration.ManageInstantReplay;
+
+        if (ImGui.Checkbox(
+                "Automatically manage Instant Replay in duties",
+                ref manageInstantReplay))
+        {
+            configuration.ManageInstantReplay = manageInstantReplay;
+
+            if (!manageInstantReplay)
+            {
+                pendingInstantReplayEnableUtc = null;
+            }
+            else if (IsInDuty() && instantReplayTrackedOn != true)
+            {
+                pendingInstantReplayEnableUtc =
+                    DateTime.UtcNow
+                    + TimeSpan.FromSeconds(configuration.DutyEntryDelaySeconds);
+            }
+
+            changed = true;
+        }
+
+        var disableOnExit = configuration.DisableInstantReplayOnDutyExit;
+
+        if (ImGui.Checkbox(
+                "Turn Instant Replay off when leaving the duty",
+                ref disableOnExit))
+        {
+            configuration.DisableInstantReplayOnDutyExit = disableOnExit;
+            changed = true;
+        }
+
+        var toggleHotkey = configuration.InstantReplayToggleHotkey;
+
+        ImGui.SetNextItemWidth(260);
+
+        if (ImGui.InputText(
+                "Instant Replay toggle hotkey",
+                ref toggleHotkey,
+                64))
+        {
+            configuration.InstantReplayToggleHotkey =
+                toggleHotkey.ToUpperInvariant();
+
+            changed = true;
+        }
+
+        var dutyDelay = configuration.DutyEntryDelaySeconds;
+
+        ImGui.SetNextItemWidth(100);
+
+        if (ImGui.InputInt(
+                "Seconds after entering duty",
+                ref dutyDelay))
+        {
+            configuration.DutyEntryDelaySeconds =
+                Math.Clamp(dutyDelay, 0, 30);
+
+            changed = true;
+        }
+
+        if (changed)
+        {
+            ValidateHotkey();
+            SaveConfiguration();
+        }
+
+        if (Hotkey.TryParse(
+                configuration.InstantReplayToggleHotkey,
+                out var toggleParsed,
+                out var toggleError))
+        {
+            ImGui.TextColored(
+                new Vector4(0.35f, 0.85f, 0.55f, 1f),
+                $"Valid toggle hotkey: {toggleParsed.DisplayName}");
+        }
+        else
+        {
+            ImGui.TextColored(
+                new Vector4(1f, 0.35f, 0.35f, 1f),
+                toggleError);
+        }
+
+        ImGui.TextUnformatted(
+            $"Instant Replay tracked state: {GetInstantReplayStateText()}");
+
+        if (ImGui.Button("Reset tracked state to UNKNOWN"))
+        {
+            instantReplayTrackedOn = null;
+        }
+
+        ImGui.TextWrapped(
+            "Important: NVIDIA does not provide Death Clipper with a reliable ON/OFF status API. " +
+            "The displayed state is based only on toggle hotkeys Death Clipper has sent. " +
+            "If you manually toggle Instant Replay outside the plugin, reset the tracked state.");
+
+        ImGui.Separator();
+
+        ImGui.TextWrapped(
+            "Death Clipper monitors deaths and presses the configured save-replay hotkey. " +
+            "Optional NVIDIA duty management can toggle Instant Replay when entering and leaving duties.");
 
         ImGui.End();
     }
 
-    private void ValidateHotkey()
+    private string GetInstantReplayStateText()
     {
-        hotkeyIsValid = Hotkey.TryParse(configuration.SaveReplayHotkey, out var hotkey, out var error);
-        hotkeyValidationMessage = hotkeyIsValid ? $"Valid hotkey: {hotkey.DisplayName}" : error;
+        return instantReplayTrackedOn switch
+        {
+            true => "ON (tracked)",
+            false => "OFF (tracked)",
+            null => "UNKNOWN",
+        };
     }
 
-    private void SaveConfiguration() => pluginInterface.SavePluginConfig(configuration);
+    private void ValidateHotkey()
+    {
+        hotkeyIsValid = Hotkey.TryParse(
+            configuration.SaveReplayHotkey,
+            out var hotkey,
+            out var error);
+
+        hotkeyValidationMessage =
+            hotkeyIsValid
+                ? $"Valid hotkey: {hotkey.DisplayName}"
+                : error;
+    }
+
+    private void SaveConfiguration()
+    {
+        pluginInterface.SavePluginConfig(configuration);
+    }
 }
